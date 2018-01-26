@@ -35,9 +35,10 @@ public class FetchAddressIntentService extends IntentService {
         String errorMsg = "";
 
         // Get location to this service through an extra
-        Location location = intent.getParcelableExtra(Constants.RECEIVER);
+        mReceiver = intent.getParcelableExtra(Constants.RECEIVER);
 
         // If location data is not sent over through an extra, send an error message to receiver
+        Location location = intent.getParcelableExtra(Constants.LOCATION_DATA_EXTRA);
         if (location == null) {
             errorMsg = getString(R.string.no_location_data_provided);
             Log.wtf(LOG_TAG, errorMsg);
@@ -69,15 +70,16 @@ public class FetchAddressIntentService extends IntentService {
             deliverResultToReceiver(Constants.FAILURE_RESULT, errorMsg);
         } else {
             Address address = addresses.get(0);
-            ArrayList<String> addressParts = new ArrayList<>();
+            String addressStr = "";
 
             // Fetch address line, join them and send to the thread
             for (int i=0; i<=address.getMaxAddressLineIndex(); i++) {
-                addressParts.add(address.getAddressLine(i));
+                if (i!=0) { addressStr += ", "; }
+                addressStr += address.getAddressLine(i);
             }
             Log.i(LOG_TAG, getString(R.string.address_found));
             deliverResultToReceiver(Constants.SUCCESS_RESULT,
-                    TextUtils.join(System.getProperty("line.separator"), addressParts));
+                    addressStr);
         }
     }
 

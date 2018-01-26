@@ -1,9 +1,13 @@
 package cuhk.cse.proj87.findmylocation;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.Geocoder;
 import android.location.Location;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.ResultReceiver;
 import android.support.annotation.NonNull;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
@@ -16,6 +20,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
@@ -32,6 +37,10 @@ public class MainActivity extends AppCompatActivity {
     private FusedLocationProviderClient mFusedLocationClient;
     private TextView TV_Location;
 
+    protected Location mLastLocation;
+    private AddressResultReceiver mResultReceiver;
+    private String mAddressOutput;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -39,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
         mLayout = findViewById(R.id.layout_main);
         TV_Location = findViewById(R.id.tv_location);
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        mResultReceiver = new AddressResultReceiver(new Handler());
+        mAddressOutput = "";
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -74,10 +85,21 @@ public class MainActivity extends AppCompatActivity {
                     .addOnSuccessListener(this, new OnSuccessListener<Location>() {
                         @Override
                         public void onSuccess(Location location) {
-                            // Got last known location. In some rare situations this can be null.
-                            if (location != null) {
-                                // Logic to handle location object
-                                TV_Location.setText(location.toString());
+                            // Getting last known location. In some rare situations this can be null.
+                            if (location == null) {
+                                Log.d(LOG_TAG, "Location is null");
+                                return;
+                            } else {
+                                mLastLocation = location;
+                                // Stop if no Geocoder is present
+                                if (!Geocoder.isPresent()) {
+                                    Log.d(LOG_TAG, getString(R.string.no_geocoder_available));
+                                    Snackbar.make(mLayout, R.string.no_geocoder_available, Snackbar.LENGTH_SHORT).show();
+                                    return;
+                                }
+                                // Start intent service and update UI
+                                startIntentService();
+                                updateUI();
                             }
                         }
                     });
@@ -137,6 +159,30 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Update UI after command to get location and fetch address
+     */
+    private void updateUI() {
+
+    }
+
+    /**
+     * Updates the address in the UI.
+     */
+    private void displayAddressOutput() {
+        TV_Location.setText(mAddressOutput);
+    }
+
+
+
+    // Use explicit intent to start the intent service
+    protected void startIntentService() {
+        Intent intent = new Intent(this, FetchAddressIntentService.class);
+        intent.putExtra(Constants.RECEIVER, mResultReceiver);
+        intent.putExtra(Constants.LOCATION_DATA_EXTRA, mLastLocation);
+        startService(intent);
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
@@ -158,4 +204,29 @@ public class MainActivity extends AppCompatActivity {
 
         return super.onOptionsItemSelected(item);
     }
+
+    /**
+     * Receiver for data sent from FetchAddressIntentService.
+     */
+    public class AddressResultReceiver extends ResultReceiver {
+        public AddressResultReceiver(Handler handler) {
+            super(handler);
+        }
+
+        /**
+         *  Receives data sent from FetchAddressIntentService and updates the UI in MainActivity.
+         */
+        @Override
+        protected void onReceiveResult(int resultCode, Bundle resultData) {
+            // Display address string, or error message sent from intent service
+            mAddressOutput = resultData.getString(Constants.RESULT_DATA_KEY);
+            displayAddressOutput();
+
+            // Show a Toast message if results found
+            if (resultCode == Constants.SUCCESS_RESULT) {
+                Snackbar.make(mLayout, getString(R.string.address_found), Snackbar.LENGTH_SHORT).show();
+            }
+        }
+    }
+
 }
